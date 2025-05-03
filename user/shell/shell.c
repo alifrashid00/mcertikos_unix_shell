@@ -20,10 +20,10 @@
 #define WHITESPACE "\t\r\n "
 #define MAXARGS 16
 static int execute_command(char *buf);
-int shell_ls(int argc, char ** argv);
-int shell_pwd(int argc, char **argv);
-int shell_cd(int argc, char **argv);
-int shell_cp(int argc, char **argv);
+int list_directory(int argc, char ** argv);
+int print_working_directory(int argc, char **argv);
+int change_directory(int argc, char **argv);
+int copy_file_or_directory(int argc, char **argv);
 int shell_mv(int argc, char **argv);
 int shell_rm(int argc, char **argv);
 int shell_mkdir(int argc, char **argv);
@@ -46,10 +46,10 @@ struct Command
 
 static struct Command commands[] = 
 {
-	{"ls","list all files and directories under working directory", shell_ls},
-	{"pwd","print working directory", shell_pwd},
-	{"cd","cd <path> \n\t change directory", shell_cd},
-	{"cp", "cp <-r> <src_path> <dest_path> \n\t copy file or directory ",shell_cp},
+	{"ls","list all files and directories under working directory", list_directory},
+	{"pwd","print working directory", print_working_directory},
+	{"cd","cd <path> \n\t change directory", change_directory},
+	{"cp", "cp <-r> <src_path> <dest_path> \n\t copy file or directory ",copy_file_or_directory},
 	{"mv", "mv <src_path> <dest_path> \n\t move file or directory",shell_mv},
 	{"rm", "rm <-r> <filename> \n\t remove file or directory",shell_rm},
 	{"mkdir", "mkdir <dirname> \n\t create directory",shell_mkdir},
@@ -62,6 +62,82 @@ static struct Command commands[] =
 
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
+
+int shell_help(int argc, char** argv){
+  int i = 0;
+  for(i = 0; i < NCOMMANDS; i++){
+      printf("%s\n", commands[i].desc);
+  }
+  return 0;
+}
+
+int list_directory(int argc, char** argv) {
+    if (argc == 1) {
+        sys_ls(shell_buf, sizeof(shell_buf));
+        printf("%s\n", shell_buf);
+    } 
+    else if (argc == 2) {
+        char current_path[100];
+        sys_pwd(current_path);
+        sys_chdir(argv[1]);
+        sys_ls(shell_buf, sizeof(shell_buf));
+        printf("%s\n", shell_buf);
+        sys_chdir(current_path);
+    }
+    else {
+        printf("ls: too many arguments.\n"); 
+    }
+    return 0;
+}
+
+int print_working_directory(int argc, char** argv) {
+    sys_pwd(shell_buf);
+    printf("%s\n", shell_buf);
+    return 0;	
+}
+
+int change_directory(int argc, char** argv) {
+    char target_path[1024];
+    if (argc == 1) {
+        strcpy(target_path, '\0');
+        sys_chdir(target_path);
+    }
+    else {
+        strcpy(target_path, argv[1]);
+        sys_chdir(target_path);	
+    }
+}
+
+int copy_file_or_directory(int argc, char** argv) {
+    char *source_path, *destination_path;
+    if(argc < 3) {
+        printf("cp: too few arguments.\n");
+        return 0;
+    }
+    else if(argc > 4) {
+        printf("cp: too many arguments.\n");
+        return 0;
+    }
+    
+    if(argc == 3) {
+        // Regular copy
+        source_path = argv[1];
+        destination_path = argv[2];
+        _shell_cp(destination_path, source_path, 0);
+        return 0;
+    }
+    else {
+        // Recursive copy
+        if(strcmp(argv[1], "-r")) {
+            printf("cp: invalid option. try '-r' ?\n");
+            return 0;
+        }
+        source_path = argv[2];
+        destination_path = argv[3];
+        _shell_cp(destination_path, source_path, 1);
+        return 0;
+    }
+}
 
 
 
