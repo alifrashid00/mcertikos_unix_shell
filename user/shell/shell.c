@@ -24,14 +24,10 @@ int list_directory(int argc, char ** argv);
 int print_working_directory(int argc, char **argv);
 int change_directory(int argc, char **argv);
 int copy_file_or_directory(int argc, char **argv);
-int shell_mv(int argc, char **argv);
-int shell_rm(int argc, char **argv);
-int shell_mkdir(int argc, char **argv);
-int shell_cat(int argc, char **argv);
-int shell_touch(int argc, char **argv);
-int shell_help(int argc, char **argv);
-int shell_write(int argc, char **argv);
-int shell_append(int argc, char **argv);
+
+int check_directory_is_empty(char* dirname);
+int check_if_directory(char * path);
+int is_file_exist(char* path);
 
 
 char shell_buf[BUFLEN];
@@ -140,6 +136,66 @@ int copy_file_or_directory(int argc, char** argv) {
 }
 
 
+int check_directory_is_empty(char * dirname){
+  if(ls_dir(shell_buf, NULL) == 5){
+      return 1;
+  }else{
+      return 0;
+  }
+}
+
+int check_if_directory(char * path){
+    int fd, isDirectory;
+    if(is_file_exist(path)){
+          fd = open(path, O_RDONLY);
+    }
+    isDirectory = sys_is_dir(fd);
+    close(fd);
+    return isDirectory;
+}
+
+// check whether a file/dir exist
+int is_file_exist(char* path){
+      int fd;
+      fd = open(path, O_RDONLY);
+if(fd == -1){
+              return 0;
+ }
+close(fd);
+      return 1;
+}
+
+
+int check_directory_is_empty(char * dirname){
+    if(ls_dir(shell_buf, NULL) == 5){
+        return 1;
+    }else{
+        return 0;
+    }
+}
+
+int check_if_directory(char * path){
+      int fd, isDirectory;
+      if(is_file_exist(path)){
+            fd = open(path, O_RDONLY);
+      }
+      isDirectory = sys_is_dir(fd);
+      close(fd);
+      return isDirectory;
+}
+
+// check whether a file/dir exist
+int is_file_exist(char* path){
+        int fd;
+        fd = open(path, O_RDONLY);
+	if(fd == -1){
+                return 0;
+ 	}
+	close(fd);
+        return 1;
+}
+
+
 
 void get_shell_input(char* buf) {
     sys_readline(buf);
@@ -224,6 +280,22 @@ int test_ipc_communication() {
     printf("ipc test pass!!\n");
     return 0;
 }
+
+
+int extract_filename(char* path, char* filename) {
+    int n = strlen(path);
+    if (n == 0) return 0;
+    int pos = n - 1;
+    while (pos >= 0) {
+      if (path[pos] == '/') {
+        break;
+      }
+      pos--;
+    }
+    strncpy(filename, path + pos + 1, n - (pos + 1));
+    return n - (pos + 1);
+  }
+  
 
 
 
