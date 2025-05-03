@@ -24,11 +24,24 @@ int list_directory(int argc, char ** argv);
 int print_working_directory(int argc, char **argv);
 int change_directory(int argc, char **argv);
 int copy_file_or_directory(int argc, char **argv);
-
+int move_file_or_directory(int argc, char **argv);
+int remove_file_or_directory(int argc, char **argv);
+int shell_mkdir(int argc, char **argv);
+int shell_cat(int argc, char **argv);
+int shell_touch(int argc, char **argv);
+int shell_help(int argc, char **argv);
+int shell_write(int argc, char **argv);
+int shell_append(int argc, char **argv);
+int remove_file_recursive(char * path, int isRecursive);
+int delete_single_file(char * filename);
+int ls_dir(char* buf, char* path);
 int check_directory_is_empty(char* dirname);
 int check_if_directory(char * path);
 int is_file_exist(char* path);
-
+int _shell_cat(char * path);
+int copy_file_recursive(char * dest_path, char * src_path, int isRecursive);
+int extract_filename(char * path, char * filename);
+int copy_single_file(char * dest_filename, char * src_filename);
 
 char shell_buf[BUFLEN];
 
@@ -46,8 +59,8 @@ static struct Command commands[] =
 	{"pwd","print working directory", print_working_directory},
 	{"cd","cd <path> \n\t change directory", change_directory},
 	{"cp", "cp <-r> <src_path> <dest_path> \n\t copy file or directory ",copy_file_or_directory},
-	{"mv", "mv <src_path> <dest_path> \n\t move file or directory",shell_mv},
-	{"rm", "rm <-r> <filename> \n\t remove file or directory",shell_rm},
+	{"mv", "mv <src_path> <dest_path> \n\t move file or directory", move_file_or_directory},
+	{"rm", "rm <-r> <filename> \n\t remove file or directory", remove_file_or_directory},
 	{"mkdir", "mkdir <dirname> \n\t create directory",shell_mkdir},
 	{"cat", "cat <filename> \n\t print file content",shell_cat},
 	{"touch", "touch <filename> \n\t create new empty file", shell_touch},
@@ -59,15 +72,7 @@ static struct Command commands[] =
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
 
-int shell_help(int argc, char** argv){
-  int i = 0;
-  for(i = 0; i < NCOMMANDS; i++){
-      printf("%s\n", commands[i].desc);
-  }
-  return 0;
-}
-
-int list_directory(int argc, char** argv) {
+nt list_directory(int argc, char** argv) {
     if (argc == 1) {
         sys_ls(shell_buf, sizeof(shell_buf));
         printf("%s\n", shell_buf);
@@ -119,7 +124,7 @@ int copy_file_or_directory(int argc, char** argv) {
         // Regular copy
         source_path = argv[1];
         destination_path = argv[2];
-        _shell_cp(destination_path, source_path, 0);
+        copy_file_recursive(destination_path, source_path, 0);
         return 0;
     }
     else {
@@ -130,40 +135,102 @@ int copy_file_or_directory(int argc, char** argv) {
         }
         source_path = argv[2];
         destination_path = argv[3];
-        _shell_cp(destination_path, source_path, 1);
+        copy_file_recursive(destination_path, source_path, 1);
         return 0;
     }
 }
 
-
-int check_directory_is_empty(char * dirname){
-  if(ls_dir(shell_buf, NULL) == 5){
-      return 1;
-  }else{
-      return 0;
-  }
-}
-
-int check_if_directory(char * path){
-    int fd, isDirectory;
-    if(is_file_exist(path)){
-          fd = open(path, O_RDONLY);
+int move_file_or_directory(int argc, char** argv) {
+    if(argc != 3) {
+        printf("mv: argument invalid.\n");
+        return 0;
     }
-    isDirectory = sys_is_dir(fd);
-    close(fd);
-    return isDirectory;
+    char* src = argv[1];
+    char* dest = argv[2];
+    if(!is_file_exist(src)) {
+        printf("mv: source file %s does not exist.\n", src);
+        return 0;
+    }
+    if(check_if_directory(src)) {
+        if(is_file_exist(dest) && !check_if_directory(dest)) {
+            printf("mv: cannot move a directory to a file\n");
+            return 0;
+        }
+        copy_file_recursive(dest, src, 1);
+        remove_file_recursive(src, 1);
+    } else {
+        copy_file_recursive(dest, src, 1);
+        remove_file_recursive(src, 0);
+    }
+    return 0;
 }
 
-// check whether a file/dir exist
-int is_file_exist(char* path){
-      int fd;
-      fd = open(path, O_RDONLY);
-if(fd == -1){
-              return 0;
- }
-close(fd);
-      return 1;
+int remove_file_or_directory(int argc, char** argv) {
+    int isRecursive;
+    int pathIdx;
+    char* path;
+    
+    if(argc == 1) {
+        printf("Too few arguments.\n");
+        return 0;
+    }
+    if(!strcmp(argv[1], "-r")) {
+        isRecursive = 1;
+        pathIdx = 2;
+    } else {
+        isRecursive = 0;
+        pathIdx = 1;
+    }
+    if(pathIdx > argc + 1) {
+        printf("rm: no path argument.\n");
+        return 0;
+    }
+    path = argv[pathIdx];
+    if(!is_file_exist(path)) {
+        printf("rm: cannot remove %s: not a file or directory.\n", path);
+        return 0;
+    }
+    remove_file_recursive(path, isRecursive);
+    return 0;
 }
+
+int remove_file_recursive(char* path, int isRecursive) {
+    int errno, len;
+    char* sub_path;
+    char rm_buf[BUFLEN];
+    
+    if(isRecursive) {
+        if(!check_if_directory(path)) {
+            return delete_single_file(path);
+        }
+        sys_chdir(path);
+        len = ls_dir(rm_buf, NULL);
+        sub_path = rm_buf;
+        while(sub_path - rm_buf < len) {
+            if(strcmp(sub_path, ".") && strcmp(sub_path, "..")) {
+                remove_file_recursive(sub_path, isRecursive);
+            }
+            sub_path += strlen(sub_path) + 1;
+        }
+        sys_chdir("..");
+        return delete_single_file(path);
+    } else {
+        if(check_if_directory(path)) {
+            printf("rm: cannot remove %s: is a directory. Use '-r'?\n", path);
+            return -1;
+        }
+        return delete_single_file(path);
+    }
+}
+
+int delete_single_file(char* filename) {
+    int errno = sys_unlink(filename);
+    if(errno == -1) {
+        printf("rm: cannot remove %s: system error.\n", filename);
+    }
+    return errno;
+}
+
 
 
 int check_directory_is_empty(char * dirname){
@@ -195,7 +262,124 @@ int is_file_exist(char* path){
         return 1;
 }
 
+int shell_mkdir(int argc, char** argv)
+{
+	int i;
+	if (argc == 1)
+		printf ("mkdir failed, no path\n");
+	
+	for (i = 1; i < argc; i++){
+		if (sys_mkdir(argv[i]) == 0)
+		;	//printf("make dir succeed.\n");
+		else
+			printf("make dir failed.\n");
+	}
+	
+	return 0;
+}
 
+
+
+
+
+
+int copy_single_file(char* dest_filename, char* src_filename) {
+    if(check_if_directory(src_filename)) {
+        sys_mkdir(dest_filename);
+        return 0;
+    }
+    int fd = open(src_filename, O_RDONLY);
+    char buf[1000];
+    read(fd, buf, 1000);
+    close(fd);
+    fd = open(dest_filename, O_CREATE|O_RDWR);
+    write(fd, buf, strlen(buf));
+    close(fd);
+    return 0;
+}
+
+int copy_file_recursive(char* dest_path, char* src_path, int isRecursive) {
+    char path[BUFLEN];
+    char filename[100];
+    char dest_path_buf[BUFLEN];
+    char src_path_buf[BUFLEN];
+    char * p;
+    if(!is_file_exist(src_path)){
+        printf("cp: %s does not exist.\n", src_path);
+        return 0;
+    }
+    if(isRecursive == 0){
+        if(check_if_directory(src_path)){
+            printf("cp: omitting directory '%s'. try '-r' ?\n", src_path);
+            return 0;
+        }
+        if(is_file_exist(dest_path) && check_if_directory(dest_path)){
+            extract_filename(src_path, filename);
+            strcpy(path, dest_path);
+            p = path + strlen(path);
+            *(p++) = '/';
+            strcpy(p, filename);
+            copy_file_recursive(path, src_path, isRecursive); 
+        }else{
+            copy_single_file(dest_path, src_path);
+        }
+    }else{
+        if(check_if_directory(src_path)){
+            if(is_file_exist(dest_path)){
+                if(check_if_directory(dest_path)){
+                    extract_filename(src_path, filename);
+                    strcpy(path, dest_path);
+                    p = path + strlen(path);
+                    *(p++) = '/';
+                    strcpy(p, filename);
+                    copy_file_recursive(path, src_path, isRecursive);            
+                }else{
+                    printf("cp: cannot copy a directory to a file '%s'.\n", dest_path);
+                    return 0;
+                }
+            }else{
+                copy_single_file(dest_path, src_path);
+                int len = ls_dir(path, src_path);
+                char* p = path;
+                while(p - path < len){
+                    int dest_len, src_len;
+                    if(strcmp(p, ".") && strcmp(p, "..")){
+                        dest_len = strlen(dest_path);
+                        src_len = strlen(src_path);
+
+                        strcpy(dest_path_buf, dest_path);
+                        strcpy(src_path_buf, src_path);
+
+                        dest_path_buf[dest_len] = '/';
+                        src_path_buf[src_len] = '/';
+                        strcpy(dest_path_buf+dest_len+1, p);
+                        strcpy(src_path_buf+src_len+1, p);
+
+                        copy_file_recursive(dest_path_buf, src_path_buf, isRecursive);
+                    }
+                    p += strlen(p) + 1; 
+                }
+            }
+        }else{
+            copy_file_recursive(dest_path, src_path, 0);
+        }
+    }
+    return 0;
+}
+
+int extract_filename(char* path, char* filename) {
+    int n = strlen(path);
+    if (n == 0) return 0;
+    int pos = n - 1;
+    while (pos >= 0) {
+      if (path[pos] == '/') {
+        break;
+      }
+      pos--;
+    }
+    strncpy(filename, path + pos + 1, n - (pos + 1));
+    return n - (pos + 1);
+}
 
 void get_shell_input(char* buf) {
     sys_readline(buf);
@@ -280,24 +464,6 @@ int test_ipc_communication() {
     printf("ipc test pass!!\n");
     return 0;
 }
-
-
-int extract_filename(char* path, char* filename) {
-    int n = strlen(path);
-    if (n == 0) return 0;
-    int pos = n - 1;
-    while (pos >= 0) {
-      if (path[pos] == '/') {
-        break;
-      }
-      pos--;
-    }
-    strncpy(filename, path + pos + 1, n - (pos + 1));
-    return n - (pos + 1);
-  }
-  
-
-
 
 int main(int argc, char** argv) {
     int shell_mode = 0;
