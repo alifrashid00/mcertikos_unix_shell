@@ -30,8 +30,8 @@ int shell_mkdir(int argc, char **argv);
 int display_file_contents(int argc, char **argv);
 int create_new_file(int argc, char **argv);
 int display_help_message(int argc, char **argv);
-int shell_write(int argc, char **argv);
-int shell_append(int argc, char **argv);
+int write_string_to_file(int argc, char **argv);
+int append_string_to_file(int argc, char **argv);
 int remove_file_recursive(char * path, int isRecursive);
 int delete_single_file(char * filename);
 int list_directory_contents(char* buf, char* path);
@@ -64,9 +64,9 @@ static struct Command commands[] =
 	{"mkdir", "mkdir <dirname> \n\t create directory",shell_mkdir},
 	{"cat", "cat <filename> \n\t print file content", display_file_contents},
 	{"touch", "touch <filename> \n\t create new empty file", create_new_file},
-        {"write", "write <string> <filename> \n\t write a string to file", shell_write},
-        {"append", "append <string> <filename> \n\t append a string to file", shell_append},
-        {"help", "help \n\t print this help message", display_help_message}
+    {"write", "write <string> <filename> \n\t write a string to file", write_string_to_file},
+    {"append", "append <string> <filename> \n\t append a string to file", append_string_to_file},
+    {"help", "help \n\t print this help message", display_help_message}
 };
 
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
@@ -140,6 +140,54 @@ int create_new_file(int argc, char** argv) {
         }
         close(open(argv[i], O_CREATE));
     }
+    return 0;
+}
+
+int write_string_to_file(int argc, char** argv) {
+    if (argc != 3) {
+        printf("write: usage: write <string> <filename>\n");
+        return 0;
+    }
+    
+    int fd = open(argv[2], O_CREATE|O_RDWR);
+    if (fd < 0) {
+        printf("write: cannot create %s\n", argv[2]);
+        return 0;
+    }
+    
+    int n = write(fd, argv[1], strlen(argv[1]));
+    if (n != strlen(argv[1])) {
+        printf("write: error writing to %s\n", argv[2]);
+    }
+    close(fd);
+    return 0;
+}
+
+int append_string_to_file(int argc, char** argv) {
+    if (argc != 3) {
+        printf("append: usage: append <string> <filename>\n");
+        return 0;
+    }
+    
+    // Read existing content
+    char buf[1000] = {0};
+    int n = 0;
+    int fd = open(argv[2], O_RDONLY);
+    if (fd >= 0) {
+        n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+    }
+    
+    // Append new content
+    fd = open(argv[2], O_CREATE|O_RDWR);
+    if (fd < 0) {
+        printf("append: cannot open %s\n", argv[2]);
+        return 0;
+    }
+    
+    strncpy(buf + n, argv[1], strlen(argv[1]));
+    write(fd, buf, strlen(buf));
+    close(fd);
     return 0;
 }
 
