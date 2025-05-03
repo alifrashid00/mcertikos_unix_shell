@@ -29,12 +29,12 @@ int remove_file_or_directory(int argc, char **argv);
 int shell_mkdir(int argc, char **argv);
 int shell_cat(int argc, char **argv);
 int shell_touch(int argc, char **argv);
-int shell_help(int argc, char **argv);
+int display_help_message(int argc, char **argv);
 int shell_write(int argc, char **argv);
 int shell_append(int argc, char **argv);
 int remove_file_recursive(char * path, int isRecursive);
 int delete_single_file(char * filename);
-int ls_dir(char* buf, char* path);
+int list_directory_contents(char* buf, char* path);
 int check_directory_is_empty(char* dirname);
 int check_if_directory(char * path);
 int is_file_exist(char* path);
@@ -66,13 +66,54 @@ static struct Command commands[] =
 	{"touch", "touch <filename> \n\t create new empty file", shell_touch},
         {"write", "write <string> <filename> \n\t write a string to file", shell_write},
         {"append", "append <string> <filename> \n\t append a string to file", shell_append},
-        {"help", "help \n\t print this help message", shell_help}
+        {"help", "help \n\t print this help message", display_help_message}
 };
 
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
+int list_directory_contents(char* buf, char * path) {
+    int len;
+    char current_path[BUFLEN];
+    if(path == NULL) {
+        len = sys_ls(buf, BUFLEN); 
+    } else {
+        sys_pwd(current_path);
+        sys_chdir(path);
+        len = sys_ls(buf, BUFLEN);
+        sys_chdir(current_path); 
+    }
+    for(int i = 0; i < len; i++) {
+        if(buf[i] == ' ') {
+            buf[i] = '\0';
+        }
+    }
+    return len;
+}
 
-nt list_directory(int argc, char** argv) {
+int display_help_message(int argc, char** argv) {
+    for(int i = 0; i < NCOMMANDS; i++) {
+        printf("%s\n", commands[i].desc);
+    }
+    return 0;
+}
+
+int shell_mkdir(int argc, char** argv)
+{
+	int i;
+	if (argc == 1)
+		printf ("mkdir failed, no path\n");
+	
+	for (i = 1; i < argc; i++){
+		if (sys_mkdir(argv[i]) == 0)
+		;	//printf("make dir succeed.\n");
+		else
+			printf("make dir failed.\n");
+	}
+	
+	return 0;
+}
+
+int list_directory(int argc, char** argv) {
     if (argc == 1) {
         sys_ls(shell_buf, sizeof(shell_buf));
         printf("%s\n", shell_buf);
@@ -204,7 +245,7 @@ int remove_file_recursive(char* path, int isRecursive) {
             return delete_single_file(path);
         }
         sys_chdir(path);
-        len = ls_dir(rm_buf, NULL);
+        len = list_directory_contents(rm_buf, NULL);
         sub_path = rm_buf;
         while(sub_path - rm_buf < len) {
             if(strcmp(sub_path, ".") && strcmp(sub_path, "..")) {
@@ -234,7 +275,7 @@ int delete_single_file(char* filename) {
 
 
 int check_directory_is_empty(char * dirname){
-    if(ls_dir(shell_buf, NULL) == 5){
+    if(list_directory_contents(shell_buf, NULL) == 5){
         return 1;
     }else{
         return 0;
@@ -339,7 +380,7 @@ int copy_file_recursive(char* dest_path, char* src_path, int isRecursive) {
                 }
             }else{
                 copy_single_file(dest_path, src_path);
-                int len = ls_dir(path, src_path);
+                int len = list_directory_contents(path, src_path);
                 char* p = path;
                 while(p - path < len){
                     int dest_len, src_len;
