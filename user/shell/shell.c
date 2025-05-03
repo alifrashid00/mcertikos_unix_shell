@@ -27,8 +27,8 @@ int copy_file_or_directory(int argc, char **argv);
 int move_file_or_directory(int argc, char **argv);
 int remove_file_or_directory(int argc, char **argv);
 int shell_mkdir(int argc, char **argv);
-int shell_cat(int argc, char **argv);
-int shell_touch(int argc, char **argv);
+int display_file_contents(int argc, char **argv);
+int create_new_file(int argc, char **argv);
 int display_help_message(int argc, char **argv);
 int shell_write(int argc, char **argv);
 int shell_append(int argc, char **argv);
@@ -62,8 +62,8 @@ static struct Command commands[] =
 	{"mv", "mv <src_path> <dest_path> \n\t move file or directory", move_file_or_directory},
 	{"rm", "rm <-r> <filename> \n\t remove file or directory", remove_file_or_directory},
 	{"mkdir", "mkdir <dirname> \n\t create directory",shell_mkdir},
-	{"cat", "cat <filename> \n\t print file content",shell_cat},
-	{"touch", "touch <filename> \n\t create new empty file", shell_touch},
+	{"cat", "cat <filename> \n\t print file content", display_file_contents},
+	{"touch", "touch <filename> \n\t create new empty file", create_new_file},
         {"write", "write <string> <filename> \n\t write a string to file", shell_write},
         {"append", "append <string> <filename> \n\t append a string to file", shell_append},
         {"help", "help \n\t print this help message", display_help_message}
@@ -111,6 +111,36 @@ int shell_mkdir(int argc, char** argv)
 	}
 	
 	return 0;
+}
+
+int display_file_contents(int argc, char** argv) {
+    if (argc == 1) {
+        printf("cat: missing file operand\n");
+        return 0;
+    }
+    
+    for (int i = 1; i < argc; i++) {
+        if(_shell_cat(argv[i]) == -1) {
+            printf("cat: %s: No such file or directory\n", argv[i]);
+        }
+    }
+    return 0;
+}
+int create_new_file(int argc, char** argv) {
+    if (argc == 1) {
+        printf("touch: missing file operand\n");
+        return 0;
+    }
+    
+    for (int i = 1; i < argc; i++) {
+        int fd = open(argv[i], O_RDONLY);
+        if(fd >= 0) {
+            close(fd);
+            continue;  // File exists, skip
+        }
+        close(open(argv[i], O_CREATE));
+    }
+    return 0;
 }
 
 int list_directory(int argc, char** argv) {
